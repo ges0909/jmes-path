@@ -1,5 +1,5 @@
 import random
-from typing import List, Any
+from typing import Dict, List, Any, Iterable, Sequence
 
 import jmespath
 import pytest
@@ -7,26 +7,26 @@ from jmespath import functions
 
 
 class AddOns(functions.Functions):
-    """selects randomly element(s) from list"""
+    """JMESPath custom functions"""
 
     @functions.signature({"types": ["array"]})
-    def _func_one_of(self, iterable):
-        """selects randomly one element from list"""
+    def _func_one_of(self, iterable: Sequence[Any]) -> Any:
+        """selects an element randomly from sequence-like data"""
         return random.choice(iterable)
 
     @functions.signature({"types": ["array"]}, {"types": ["number"]})
-    def _func_some_of(self, iterable, number: int) -> List[Any]:
-        """selects randomly `number` elements from list"""
+    def _func_some_of(self, iterable: Sequence[Any], number: int) -> List[Any]:
+        """selects some elements randomly from sequence-like data"""
         return random.sample(iterable, number if number <= len(iterable) else len(iterable))
 
     @functions.signature({"types": ["array"]})
-    def _func_unique(self, iterable):
-        """makes list elements unique"""
+    def _func_unique(self, iterable: Iterable[Any]) -> List[Any]:
+        """removes duplicates from iterables"""
         return list(set(iterable))
 
     @functions.signature({"types": ["array"]}, {"types": ["string"]})
-    def _func_group_by(self, iterable, key: str):
-        """groups list elements by key"""
+    def _func_group_by(self, iterable: Iterable[Any], key: str) -> Dict[Any, Any]:
+        """groups elements of iterables by key"""
 
         groups = {}
         for o in iterable:
@@ -37,22 +37,22 @@ class AddOns(functions.Functions):
         return groups
 
     @functions.signature({"types": ["array"]}, {"types": ["string"]})
-    def _func_first_of_grouped_by(self, iterable, key: str):
-        """ """
+    def _func_group_by_select_first(self, iterable: Iterable[Any], key: str) -> List[Any]:
+        """groups elements of iterables by key, selects the first value of each group and retuns them in a list"""
         groups = self._func_group_by(iterable=iterable, key=key)
         return [v[0] for v in groups.values()]
 
     @functions.signature({"types": ["array"]}, {"types": ["string"]})
-    def _func_one_of_grouped_by(self, iterable, key: str):
-        """ """
+    def _func_group_by_select_one(self, iterable: Iterable[Any], key: str) -> List[Any]:
+        """groups elements of iterables by key, selects a value of each group randomly and retuns them in a list"""
         groups = self._func_group_by(iterable=iterable, key=key)
         return [self._func_one_of(v) for v in groups.values()]
 
-    @functions.signature({"types": ["array"]}, {"types": ["string"]})
-    def _func_some_of_grouped_by(self, iterable, key: str):
-        """ """
+    @functions.signature({"types": ["array"]}, {"types": ["string"]}, {"types": ["number"]})
+    def _func_group_by_select_some(self, iterable: Iterable[Any], key: str, number: int) -> List[Any]:
+        """groups elements of iterables by key, selects some values of each group randomly and retuns them in a list"""
         groups = self._func_group_by(iterable=iterable, key=key)
-        return [self._func_some_of(v) for v in groups.values()]
+        return [self._func_some_of(iterable=v, number=number) for v in groups.values()]
 
 
 @pytest.fixture
@@ -142,7 +142,7 @@ def test_unique(options):
     assert set(result) == {"A", "B"}
 
 
-def test_unique_and_sort(options):
+def test_unique_sort(options):
     result = jmespath.search("*[].model | unique(@) | sort(@)", data, options=options)
     assert result == ["A", "B"]
 
@@ -160,16 +160,16 @@ def test_group_by(options):
     }
 
 
-def test_group_by_and_select_first(options):
-    result = jmespath.search("*[] | first_of_grouped_by(@, `model`)", data, options=options)
+def test_group_by_select_first(options):
+    result = jmespath.search("*[] | group_by_select_first(@, `model`)", data, options=options)
     assert result == [
         {"model": "A", "vendor": "A GmbH", "mac": "11:11:11:11:11:11:11:11"},
         {"model": "B", "vendor": "B AG", "mac": "22:22:22:22:22:22:22:22"},
     ]
 
 
-def test_group_by_and_select_one_of(options):
-    result = jmespath.search("*[] | one_of_grouped_by(@, `model`)", data, options=options)
+def test_group_by_select_one(options):
+    result = jmespath.search("*[] | group_by_select_one(@, `model`)", data, options=options)
     assert result == [
         {"model": "A", "vendor": "A GmbH", "mac": "11:11:11:11:11:11:11:11"},
         {"model": "B", "vendor": "B AG", "mac": "22:22:22:22:22:22:22:22"},
